@@ -16,24 +16,35 @@ internal static class Program {
         form.Shown += async (_, _) => {
             try {
                 var opts = new CoreWebView2EnvironmentOptions {
-                    /* 本地单用户工具：放宽同源策略，直连各平台 API */
+                    /* 本地单用户工具：放宽同源策略，五平台 API 直连 */
                     AdditionalBrowserArguments = "--disable-web-security"
                 };
-                var env = await CoreWebView2Environment.CreateAsync(null, null, opts);
+                string udf = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "ikun-workbench");
+                var env = await CoreWebView2Environment.CreateAsync(null, udf, opts);
                 await wv.EnsureCoreWebView2Async(env);
                 string www = Path.Combine(AppContext.BaseDirectory, "www");
                 if (!Directory.Exists(www)) Directory.CreateDirectory(www);
                 wv.CoreWebView2.SetVirtualHostNameToFolderMapping(
                     "app.local", www, CoreWebView2HostResourceAccessKind.Allow);
-                wv.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
                 wv.Source = new Uri("https://app.local/index.html");
-            } catch (Exception ex) {
+            } catch (WebView2RuntimeNotFoundException rnfe) {
                 MessageBox.Show(
-                    "需要 Microsoft Edge WebView2 运行时（Win10/11 一般自带）。\n" +
-                    "下载地址：https://developer.microsoft.com/microsoft-edge/webview2\n\n" + ex.Message,
+                    "未检测到 Microsoft Edge WebView2 运行时。\nWin11 一般自带；若被精简请下载安装：\n" +
+                    "https://developer.microsoft.com/microsoft-edge/webview2\n\n" + rnfe.Message,
                     "缺少 WebView2 运行时", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                    "https://developer.microsoft.com/microsoft-edge/webview2") { UseShellExecute = true });
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                    "https://developer.microsoft.com/microsoft-edge/webview2") { UseShellExecute = true }); } catch { }
+                form.Close();
+            } catch (DllNotFoundException dnfe) {
+                MessageBox.Show("WebView2Loader.dll 加载失败：\n" + dnfe.Message +
+                    "\n\n请确保 ikun.exe 与 WebView2Loader.dll 在同一文件夹（不要单独拷贝 exe）。",
+                    "启动失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                form.Close();
+            } catch (Exception ex) {
+                MessageBox.Show(ex.ToString(), "启动失败（完整信息）",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
                 form.Close();
             }
         };

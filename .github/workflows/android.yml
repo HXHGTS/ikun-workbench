@@ -67,7 +67,7 @@ jobs:
           $ver = "1.0.$($env:GITHUB_RUN_NUMBER - 1)"
           foreach($arch in @("win-x64","win-x86","win-arm64")){
             $name = $arch.Split('-')[1]
-            dotnet publish windows/ikun/ikun.csproj -c Release -r $arch -o "out/$arch" -p:Version=$ver
+            dotnet publish windows/ikun/ikun.csproj -c Release -r $arch -o "out/$arch"
             New-Item -ItemType Directory -Force -Path "out/$arch/www" | Out-Null
             Copy-Item www/index.html "out/$arch/www/index.html"
             Compress-Archive -Path "out/$arch/*" -DestinationPath "ikun-windows-$name.zip"
@@ -106,5 +106,5 @@ jobs:
           else
             gh release create "$TAG" pub/* --repo "$GITHUB_REPOSITORY" \
               --title "ikun新媒体制作中心 $TAG" \
-              --notes "自动构建 · 正式签名 · Android（universal/arm64/armv7/x86_64/x86）+ Windows（x64/x86/arm64）"
+              --notes "自动构建 · 正式签名 · Android（universal/arm64/armv7/x86_64/x86）+ Windows（x64/x86/arm64，文件夹版含 WebView2Loader）"
           fi
