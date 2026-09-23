@@ -7,8 +7,8 @@ android {
         applicationId "ai.ikunattacker.ikunwb"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode project.hasProperty("VERSION_CODE") ? project.property("VERSION_CODE").toInteger() : 1
+        versionName project.findProperty("APP_VER") ?: "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -25,6 +25,14 @@ android {
                 keyAlias System.getenv("KS_ALIAS") ?: "ikun"
                 keyPassword System.getenv("KS_PASS") ?: "ikun2026"
             }
+        }
+    }
+    splits {
+        abi {
+            enable true
+            reset()
+            include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+            universalApk true
         }
     }
     buildTypes {
