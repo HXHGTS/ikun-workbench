@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ikun新媒体制作中心</string>
+    <string name="title_activity_main">ikun新媒体制作中心</string>
+    <string name="package_name">ai.ikunattacker.ikunwb</string>
+    <string name="custom_url_scheme">ai.ikunattacker.ikunwb</string>
+</resources>

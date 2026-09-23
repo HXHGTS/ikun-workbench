@@ -1,0 +1,7 @@
+{
+  "appId": "ai.ikunattacker.ikunwb",
+  "appName": "ikun新媒体制作中心",
+  "webDir": "www",
+  "android": { "allowMixedContent": true },
+  "plugins": { "CapacitorHttp": { "enabled": true } }
+}
