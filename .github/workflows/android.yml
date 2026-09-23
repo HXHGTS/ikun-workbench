@@ -104,7 +104,7 @@ jobs:
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" pub/* --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" pub/* \
+            gh release create "$TAG" pub/* --repo "$GITHUB_REPOSITORY" \
               --title "ikun新媒体制作中心 $TAG" \
               --notes "自动构建 · 正式签名 · Android（universal/arm64/armv7/x86_64/x86）+ Windows（x64/x86/arm64）"
           fi
