@@ -3,7 +3,6 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-mod komi;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
