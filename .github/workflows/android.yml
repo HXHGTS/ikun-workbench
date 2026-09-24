@@ -59,6 +59,10 @@ jobs:
         working-directory: windows-tauri
         run: cargo tauri android init
 
+      - name: Debug gen structure
+        working-directory: windows-tauri
+        run: find gen -maxdepth 2 2>/dev/null | head -20
+
       - name: Patch gen/android
         working-directory: windows-tauri
         run: python3 ../scripts/patch_android.py gen/android "1.0.$((GITHUB_RUN_NUMBER-1))"
