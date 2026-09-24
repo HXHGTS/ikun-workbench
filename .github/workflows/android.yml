@@ -73,7 +73,7 @@ jobs:
           KS_PASS: ${{ secrets.KS_PASS }}
         run: |
           mkdir -p pub
-          find gen/android/app/build/outputs/apk -name "*.apk" -exec cp {} pub/ \;
+          find gen/android/ikun/build/outputs/apk -name "*.apk" -exec cp {} pub/ \;
           cd pub
           for f in *-unsigned.apk; do
             [ -e "$f" ] && mv "$f" "${f%-unsigned.apk}.apk" || true

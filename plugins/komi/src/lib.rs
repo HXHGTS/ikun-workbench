@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::{
-    plugin::{Builder, PluginApi},
-    AppHandle, Runtime, TauriPlugin,
+    plugin::{Builder, PluginApi, TauriPlugin},
+    AppHandle, Runtime,
 };
 
 #[cfg(target_os = "android")]
