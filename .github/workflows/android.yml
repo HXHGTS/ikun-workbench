@@ -67,9 +67,13 @@ jobs:
         working-directory: windows-tauri
         run: python3 ../scripts/patch_android.py gen/android "1.0.$((GITHUB_RUN_NUMBER-1))"
 
-      - name: Build APKs
-        working-directory: windows-tauri/gen/android
-        run: ./gradlew assembleRelease --no-daemon
+      - name: Build (tauri android)
+        working-directory: windows-tauri
+        run: cargo tauri android build
+
+      - name: Find build outputs
+        working-directory: windows-tauri
+        run: find gen -name "*.apk" -o -name "*.aab" | head -12
 
       - name: Sign & collect APKs
         env:
