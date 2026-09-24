@@ -8,7 +8,7 @@ import re, sys, json
 gen = sys.argv[1] if len(sys.argv) > 1 else "gen/android"
 ver = sys.argv[2] if len(sys.argv) > 2 else None
 
-gb = open(f"{gen}/app/build.gradle", encoding="utf-8").read()
+gb = open(f"{gen}/ikun/build.gradle", encoding="utf-8").read()
 # splits 注入（buildTypes 前）
 if "splits {" not in gb:
     gb = gb.replace("    buildTypes {", """    splits {
@@ -23,11 +23,11 @@ if "splits {" not in gb:
 # versionName 注入
 if ver:
     gb = re.sub(r'versionName\s+"[^"]*"', f'versionName "{ver}"', gb, count=1)
-open(f"{gen}/app/build.gradle", "w", encoding="utf-8").write(gb)
+open(f"{gen}/ikun/build.gradle", "w", encoding="utf-8").write(gb)
 print("build.gradle: splits + versionName ✓")
 
 # MainActivity.kt 权限请求
-mk_path = f"{gen}/app/src/main/java"
+mk_path = f"{gen}/ikun/src/main/java"
 import glob
 mk = glob.glob(f"{mk_path}/**/MainActivity.kt", recursive=True)
 if mk:
