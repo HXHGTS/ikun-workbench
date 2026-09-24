@@ -1,0 +1,4 @@
+"$schema" = "schemas/schema.json"
+[default]
+description = "允许 ikun 使用通知与保存"
+permissions = ["allow-show", "allow-update", "allow-hide", "allow-result", "allow-save"]

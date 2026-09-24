@@ -9,6 +9,7 @@ permissions:
   contents: write
 
 jobs:
+
   android:
     runs-on: ubuntu-latest
     steps:
@@ -24,34 +25,74 @@ jobs:
           node-version: '20'
           cache: npm
 
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: 'aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android,x86_64-unknown-linux-gnu'
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'windows-tauri'
+
       - name: Install deps
         run: npm ci
 
-      - name: Capacitor sync
-        run: npx cap sync android
+      - name: Install tauri-cli
+        run: |
+          curl -sL "https://github.com/tauri-apps/tauri/releases/download/tauri-cli-v2.1.0/tauri-cli-x86_64-unknown-linux-gnu.gz" -o cli.gz
+          gunzip -f cli.gz
+          chmod +x cli
+          sudo mv cli /usr/local/bin/cargo-tauri
+          cargo-tauri --version
 
-      - name: Restore keystore (if secret provided)
+      - name: Android NDK
+        run: |
+          NDK=$(ls $ANDROID_HOME/ndk | sort -V | tail -1)
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK" >> $GITHUB_ENV
+          echo "NDK $NDK"
+
+      - name: Set version
+        run: |
+          VER="1.0.$((GITHUB_RUN_NUMBER-1))"
+          sed -i "s/\"version\": \"1.0.0\"/\"version\": \"$VER\"/" windows-tauri/tauri.conf.json
+
+      - name: Android init
+        working-directory: windows-tauri
+        run: cargo tauri android init
+
+      - name: Patch gen/android
+        working-directory: windows-tauri
+        run: python3 ../scripts/patch_android.py gen/android "1.0.$((GITHUB_RUN_NUMBER-1))"
+
+      - name: Build APKs
+        working-directory: windows-tauri
+        run: cargo tauri android build --apk
+
+      - name: Sign & collect APKs
         env:
           KS_B64: ${{ secrets.KS_BASE64 }}
+          KS_PASS: ${{ secrets.KS_PASS }}
         run: |
+          mkdir -p pub
+          find gen/android/app/build/outputs/apk -name "*.apk" -exec cp {} pub/ \;
+          cd pub
+          for f in *-unsigned.apk; do
+            [ -e "$f" ] && mv "$f" "${f%-unsigned.apk}.apk" || true
+          done
+          BTDIR=$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)
           if [ -n "$KS_B64" ]; then
             echo "$KS_B64" | base64 -d > /tmp/ikun-release.keystore
+            for f in *.apk; do
+              $BTDIR/zipalign -p 4 "$f" /tmp/al.apk
+              $BTDIR/apksigner sign --ks /tmp/ikun-release.keystore --ks-pass "pass:$KS_PASS" --ks-key-alias ikun --out /tmp/signed.apk /tmp/al.apk
+              mv /tmp/signed.apk "$f"
+            done
           fi
-
-      - name: Build APKs (universal + ABI splits)
-        working-directory: android
-        run: |
-          APP_VER="1.0.$((GITHUB_RUN_NUMBER-1))"
-          ./gradlew assembleRelease --no-daemon -PAPP_VER="$APP_VER" -PVERSION_CODE="$GITHUB_RUN_NUMBER"
-        env:
-          KS_PATH: /tmp/ikun-release.keystore
-          KS_PASS: ${{ secrets.KS_PASS }}
-          KS_ALIAS: ikun
+          ls -la
 
       - uses: actions/upload-artifact@v4
         with:
           name: android-apks
-          path: android/app/build/outputs/apk/release/*.apk
+          path: pub/*.apk
 
   windows:
     runs-on: windows-latest
