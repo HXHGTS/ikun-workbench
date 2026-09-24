@@ -58,24 +58,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          dotnet-version: '8.0.x'
+          targets: 'x86_64-pc-windows-msvc,i686-pc-windows-msvc,aarch64-pc-windows-msvc'
 
-      - name: Publish x64 / x86 / arm64
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'windows-tauri'
+
+      - name: Set version
         run: |
           $ver = "1.0.$($env:GITHUB_RUN_NUMBER - 1)"
-          foreach($arch in @("win-x64","win-x86","win-arm64")){
-            $name = $arch.Split('-')[1]
-            dotnet publish windows/ikun/ikun.csproj -c Release -r $arch -o "out/$arch"
-            New-Item -ItemType Directory -Force -Path "out/$arch/www" | Out-Null
-            Copy-Item www/index.html "out/$arch/www/index.html"
-            Compress-Archive -Path "out/$arch/*" -DestinationPath "ikun-windows-$name.zip"
-          }
+          (Get-Content windows-tauri/Cargo.toml) -replace '^version = .*', "version = `"$ver`"" | Set-Content windows-tauri/Cargo.toml
+          (Get-Content windows-tauri/tauri.conf.json) -replace '"version": "1.0.0"', "`"version`": `"$ver`"" | Set-Content windows-tauri/tauri.conf.json
+
+      - name: Build x64
+        working-directory: windows-tauri
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Build x86
+        working-directory: windows-tauri
+        run: cargo build --release --target i686-pc-windows-msvc
+
+      - name: Build arm64
+        working-directory: windows-tauri
+        run: cargo build --release --target aarch64-pc-windows-msvc
+
+      - name: Collect executables
+        run: |
+          New-Item -ItemType Directory -Force -Path pub-win | Out-Null
+          Copy-Item windows-tauri/target/x86_64-pc-windows-msvc/release/ikun.exe pub-win/ikun-windows-x64.exe
+          Copy-Item windows-tauri/target/i686-pc-windows-msvc/release/ikun.exe pub-win/ikun-windows-x86.exe
+          Copy-Item windows-tauri/target/aarch64-pc-windows-msvc/release/ikun.exe pub-win/ikun-windows-arm64.exe
+          Get-ChildItem pub-win
+
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-zips
-          path: ikun-windows-*.zip
+          name: windows-exe
+          path: pub-win/*.exe
 
   release:
     needs: [android, windows]
@@ -93,7 +113,7 @@ jobs:
           for f in app-*.apk; do
             mv "$f" "ikun-android-$(basename "$f" | sed 's/app-//;s/-release//')"
           done
-          find ../rel -name "ikun-windows-*.zip" -exec mv {} . \;
+          find ../rel -name "ikun-windows-*.exe" -exec mv {} . \;
           ls -la
 
       - name: Publish GitHub Release
@@ -106,5 +126,5 @@ jobs:
           else
             gh release create "$TAG" pub/* --repo "$GITHUB_REPOSITORY" \
               --title "ikun新媒体制作中心 $TAG" \
-              --notes "自动构建 · 正式签名 · Android（universal/arm64/armv7/x86_64/x86）+ Windows（x64/x86/arm64，文件夹版含 WebView2Loader）"
+              --notes "自动构建 · 正式签名 · Android（universal/arm64/armv7/x86_64/x86）+ Windows（x64/x86/arm64 · Tauri/Rust 原生壳）"
           fi

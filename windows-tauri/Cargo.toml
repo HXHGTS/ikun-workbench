@@ -1,0 +1,11 @@
+[package]
+name = "ikun"
+version = "1.0.0"
+edition = "2021"
+description = "ikun新媒体制作中心"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
