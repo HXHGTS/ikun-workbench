@@ -38,10 +38,10 @@ jobs:
 
       - name: Install tauri-cli
         run: |
-          curl -sL "https://github.com/tauri-apps/tauri/releases/download/tauri-cli-v2.1.0/tauri-cli-x86_64-unknown-linux-gnu.gz" -o cli.gz
-          gunzip -f cli.gz
-          chmod +x cli
-          sudo mv cli /usr/local/bin/cargo-tauri
+          curl -sL "https://github.com/tauri-apps/tauri/releases/download/tauri-cli-v2.9.4/cargo-tauri-x86_64-unknown-linux-gnu.tgz" -o cli.tgz
+          tar xzf cli.tgz
+          chmod +x cargo-tauri
+          sudo mv cargo-tauri /usr/local/bin/
           cargo-tauri --version
 
       - name: Android NDK
