@@ -83,6 +83,15 @@ async fn result<R: Runtime>(app: AppHandle<R>, args: ResultArgs) -> Result<(), S
 
 #[tauri::command]
 async fn save<R: Runtime>(app: AppHandle<R>, args: SaveArgs) -> Result<serde_json::Value, String> {
+    save_to_device(app, args).await
+}
+
+/// Save through the platform implementation. Android forwards to MediaStore;
+/// desktop intentionally returns an empty result so the web UI can use download.
+pub async fn save_to_device<R: Runtime>(
+    app: AppHandle<R>,
+    args: SaveArgs,
+) -> Result<serde_json::Value, String> {
     #[cfg(target_os = "android")]
     {
         let r = app.state::<tauri::plugin::PluginHandle<R>>()
@@ -91,7 +100,7 @@ async fn save<R: Runtime>(app: AppHandle<R>, args: SaveArgs) -> Result<serde_jso
         Ok(serde_json::to_value(r).unwrap_or(serde_json::json!({})))
     }
     #[cfg(not(target_os = "android"))]
-    { Ok(serde_json::json!({})) }
+    { let _ = (app, args); Ok(serde_json::json!({})) }
 }
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {

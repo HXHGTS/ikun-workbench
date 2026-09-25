@@ -8,6 +8,7 @@
     "frontendDist": "../www"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "ikun新媒体制作中心",

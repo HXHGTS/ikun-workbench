@@ -43,6 +43,14 @@ async fn to_resp(resp: reqwest::Response) -> Result<HttpResp, String> {
 }
 
 #[tauri::command]
+async fn save_generated_file<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    args: komi::SaveArgs,
+) -> Result<serde_json::Value, String> {
+    komi::save_to_device(app, args).await
+}
+
+#[tauri::command]
 async fn http_post(req: HttpReq) -> Result<HttpResp, String> {
     let client = client(req.timeout_ms.unwrap_or(300000)).await?;
     let mut rb = client.post(&req.url);
@@ -116,7 +124,7 @@ async fn http_multipart(req: MultipartReq) -> Result<HttpResp, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(komi::init())
-        .invoke_handler(tauri::generate_handler![http_post, http_get, http_multipart])
+        .invoke_handler(tauri::generate_handler![http_post, http_get, http_multipart, save_generated_file])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

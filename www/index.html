@@ -1294,13 +1294,21 @@ async function download(rec){
     const mime=blob.type||"image/png";
     const isVid=mime.includes("video")||mime.includes("mp4")||rec.kind==="video";
     const fname=rec.fname||("komi_"+Date.now()+(isVid?".mp4":".png"));
-    if(KomiSave){ /* APK：MediaStore 直存系统相册/影片（Pictures|Movies/ikun/） */
+    if(KomiSave){ /* Capacitor APK：MediaStore 直存 */
       const dataUrl=await blobToDataUrl(blob);
       const r=await KomiSave.save({name:fname,mime,base64:dataUrl.split(",")[1]});
       toast(`✅ 已保存：${(r&&r.path)||"系统相册"}`,"ok",7000);
       return;
     }
-    /* 浏览器：a.download */
+    if(TauriInvoke&&/Android/i.test(navigator.userAgent)){ /* Tauri APK：经 Rust command 转调 Android MediaStore 插件 */
+      const dataUrl=await blobToDataUrl(blob);
+      const r=await TauriInvoke("save_generated_file",{
+        args:{name:fname,mime,base64:dataUrl.split(",")[1]}
+      });
+      if(r&&r.path){ toast(`✅ 已保存：${r.path}`,"ok",7000); return; }
+      /* Windows Tauri 返回空结果，继续走浏览器下载 */
+    }
+    /* 普通浏览器 / Windows Tauri：a.download */
     const a=document.createElement("a");
     a.href=rec.src.startsWith("data:")||rec.src.startsWith("blob:")?rec.src:await urlToDataUrl(rec.src,curCfg().key);
     a.download=fname; document.body.appendChild(a); a.click(); a.remove();
@@ -1329,6 +1337,10 @@ const KomiSave=(()=>{ try{
   if(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform()){
     const p=window.Capacitor.Plugins&&window.Capacitor.Plugins.KomiSave;
     if(p&&p.save) return p;
+  }}catch(e){} return null; })();
+const TauriInvoke=(()=>{ try{
+  if(window.__TAURI__&&window.__TAURI__.core&&typeof window.__TAURI__.core.invoke==="function")
+    return (command,args)=>window.__TAURI__.core.invoke(command,args);
   }}catch(e){} return null; })();
 function setStatus(html,err=false){
   const s=$("#status"); s.innerHTML=html; s.className=err?"err":"";
