@@ -79,23 +79,52 @@ jobs:
         env:
           KS_B64: ${{ secrets.KS_BASE64 }}
           KS_PASS: ${{ secrets.KS_PASS }}
+        shell: bash
         run: |
+          set -euo pipefail
+          APK_DIR="windows-tauri/gen/android/app/build/outputs/apk"
           mkdir -p pub
-          find gen/android -path "*/build/outputs/apk/*" -name "*.apk" -exec cp {} pub/ \;
-          cd pub
-          for f in *-unsigned.apk; do
-            [ -e "$f" ] && mv "$f" "${f%-unsigned.apk}.apk" || true
-          done
-          BTDIR=$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)
-          if [ -n "$KS_B64" ]; then
-            echo "$KS_B64" | base64 -d > /tmp/ikun-release.keystore
-            for f in *.apk; do
-              $BTDIR/zipalign -p 4 "$f" /tmp/al.apk
-              $BTDIR/apksigner sign --ks /tmp/ikun-release.keystore --ks-pass "pass:$KS_PASS" --ks-key-alias ikun --out /tmp/signed.apk /tmp/al.apk
-              mv /tmp/signed.apk "$f"
-            done
+          if [[ ! -d "$APK_DIR" ]]; then
+            echo "APK output directory not found: $APK_DIR"
+            find windows-tauri/gen/android -maxdepth 7 -type d -path "*/build/outputs*" -print || true
+            exit 1
           fi
-          ls -la
+
+          while IFS= read -r -d '' src; do
+            filename=$(basename "$src")
+            filename=${filename%-unsigned.apk}.apk
+            cp "$src" "pub/$filename"
+            echo "Collected: $src -> pub/$filename"
+          done < <(find "$APK_DIR" -type f -name '*.apk' -print0)
+
+          shopt -s nullglob
+          apks=(pub/*.apk)
+          if (( ${#apks[@]} == 0 )); then
+            echo "No APK files found under $APK_DIR"
+            find "$APK_DIR" -maxdepth 5 -type f -print || true
+            exit 1
+          fi
+
+          BTDIR="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          if [[ -n "$KS_B64" ]]; then
+            echo "$KS_B64" | base64 --decode > "$RUNNER_TEMP/ikun-release.keystore"
+            for f in "${apks[@]}"; do
+              aligned="$RUNNER_TEMP/aligned.apk"
+              signed="$RUNNER_TEMP/signed.apk"
+              "$BTDIR/zipalign" -f -p 4 "$f" "$aligned"
+              "$BTDIR/apksigner" sign \
+                --ks "$RUNNER_TEMP/ikun-release.keystore" \
+                --ks-pass "pass:$KS_PASS" \
+                --ks-key-alias ikun \
+                --out "$signed" "$aligned"
+              mv "$signed" "$f"
+              "$BTDIR/apksigner" verify "$f"
+              echo "Signed and verified: $f"
+            done
+          else
+            echo "KS_BASE64 is empty; APKs will remain unsigned"
+          fi
+          ls -lah pub
 
       - uses: actions/upload-artifact@v4
         with:
