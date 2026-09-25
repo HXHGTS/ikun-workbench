@@ -584,11 +584,31 @@ function toast(msg,type="",ms=4200){
 }
 
 /* ---------- HTTP ---------- */
+/* 部分网关（随想 / AkileAI）不返回 CORS 头：Windows 端靠 --disable-web-security 放行，
+   安卓 WebView 会拦截。安卓 Tauri 端改走 Rust http_* 命令（原生网络栈，无 CORS）。 */
+function onAndroidTauri(){ return !!(TauriInvoke && /Android/i.test(navigator.userAgent)); }
+function b64ToText(b64){
+  const bin=atob(b64); const buf=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
+  return new TextDecoder("utf-8",{fatal:false}).decode(buf);
+}
+function tauriResp(r){
+  const txt=(r&&typeof r.bodyB64==="string")?b64ToText(r.bodyB64):"";
+  let payload=null;
+  if(txt){ try{payload=JSON.parse(txt);}catch(e){ payload=txt; } }
+  const ct=(r&&r.headers&&(r.headers["content-type"]||r.headers["Content-Type"]))||"application/json";
+  return {status:r?r.status:0, ok:!!r&&r.status>=200&&r.status<300, body:payload, ct};
+}
 async function apiPost(url,key,body,{timeout=300000,headers={}}={}){
   const ac=new AbortController(); const tid=setTimeout(()=>ac.abort(),timeout);
   try{
     const isForm=(typeof FormData!=="undefined")&&(body instanceof FormData);
     const hdr={"Authorization":"Bearer "+key,"X-Title":"Komi-Workbench",...headers};
+    if(onAndroidTauri()&&!isForm){
+      if(!hdr["Content-Type"]) hdr["Content-Type"]="application/json";
+      const r=await TauriInvoke("http_post",{req:{url,headers:hdr,body:JSON.stringify(body||{}),timeoutMs:timeout}});
+      return tauriResp(r);
+    }
     if(!isForm) hdr["Content-Type"]="application/json";
     const r=await fetch(url,{method:"POST",signal:ac.signal,headers:hdr,
       body:isForm?body:JSON.stringify(body||{})});
@@ -603,6 +623,12 @@ async function apiPost(url,key,body,{timeout=300000,headers={}}={}){
 async function apiGet(url,key,{timeout=90000}={}){
   const ac=new AbortController(); const tid=setTimeout(()=>ac.abort(),timeout);
   try{
+    if(onAndroidTauri()){
+      const hdr=key?{"Authorization":"Bearer "+key}:{};
+      const r=await TauriInvoke("http_get",{req:{url,headers:hdr,timeoutMs:timeout}});
+      const out=tauriResp(r);
+      return {status:out.status,ok:out.ok,body:out.body};
+    }
     const r=await fetch(url,{signal:ac.signal,headers:key?{"Authorization":"Bearer "+key}:{}});
     let payload=null; try{payload=await r.json();}catch(e){}
     return {status:r.status,ok:r.ok,body:payload};
@@ -839,6 +865,21 @@ async function openaiEdits(cfg,q){ /* GPT 系图生图：/images/edits multipart
   if(q.quality) fd.append("quality",q.quality);
   if(q.background) fd.append("background",q.background);
   if(q.n>1) fd.append("n",String(q.n));
+  if(onAndroidTauri()){ /* 安卓：multipart 走 Rust http_multipart（字段名 image 与本处一致） */
+    const fields={model:q.model,prompt:q.prompt};
+    if(q.size) fields.size=q.size;
+    if(q.quality) fields.quality=q.quality;
+    if(q.background) fields.background=q.background;
+    if(q.n>1) fields.n=String(q.n);
+    const images=q.images.map(u=>{
+      const m2=/^data:(image\/[a-z+.-]+);base64,(.+)$/i.exec(u);
+      if(!m2) throw new Error("参考图格式异常（应为 dataURL）");
+      return {mime:m2[1],dataB64:m2[2]};
+    });
+    const r=await TauriInvoke("http_multipart",{req:{url:cfg.base+"/images/edits",
+      headers:{"Authorization":"Bearer "+cfg.key},fields,images,timeoutMs:300000}});
+    return tauriResp(r);
+  }
   const ac=new AbortController(); const tid=setTimeout(()=>ac.abort(),300000);
   try{
     const r=await fetch(cfg.base+"/images/edits",{method:"POST",
