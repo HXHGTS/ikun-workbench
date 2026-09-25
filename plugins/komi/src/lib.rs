@@ -42,7 +42,7 @@ async fn show<R: Runtime>(app: AppHandle<R>, args: ShowArgs) -> Result<(), Strin
     #[cfg(target_os = "android")]
     {
         app.state::<tauri::plugin::PluginHandle<R>>()
-            .run_mobile_plugin("show", args)
+            .run_mobile_plugin::<()>("show", args)
             .map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -53,7 +53,7 @@ async fn update<R: Runtime>(app: AppHandle<R>, args: UpdateArgs) -> Result<(), S
     #[cfg(target_os = "android")]
     {
         app.state::<tauri::plugin::PluginHandle<R>>()
-            .run_mobile_plugin("update", args)
+            .run_mobile_plugin::<()>("update", args)
             .map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -64,7 +64,7 @@ async fn hide<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     #[cfg(target_os = "android")]
     {
         app.state::<tauri::plugin::PluginHandle<R>>()
-            .run_mobile_plugin("hide", serde_json::json!({}))
+            .run_mobile_plugin::<()>("hide", serde_json::json!({}))
             .map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -75,7 +75,7 @@ async fn result<R: Runtime>(app: AppHandle<R>, args: ResultArgs) -> Result<(), S
     #[cfg(target_os = "android")]
     {
         app.state::<tauri::plugin::PluginHandle<R>>()
-            .run_mobile_plugin("result", args)
+            .run_mobile_plugin::<()>("result", args)
             .map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -86,7 +86,7 @@ async fn save<R: Runtime>(app: AppHandle<R>, args: SaveArgs) -> Result<serde_jso
     #[cfg(target_os = "android")]
     {
         let r = app.state::<tauri::plugin::PluginHandle<R>>()
-            .run_mobile_plugin("save", args)
+            .run_mobile_plugin::<serde_json::Value>("save", args)
             .map_err(|e| e.to_string())?;
         Ok(serde_json::to_value(r).unwrap_or(serde_json::json!({})))
     }
