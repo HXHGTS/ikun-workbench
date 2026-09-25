@@ -1341,7 +1341,7 @@ const KomiSave=(()=>{ try{
 const TauriInvoke=(()=>{ try{
   if(window.__TAURI__&&window.__TAURI__.core&&typeof window.__TAURI__.core.invoke==="function")
     return (command,args)=>window.__TAURI__.core.invoke(command,args);
-  }}catch(e){} return null; })();
+  }catch(e){} return null; })();
 function setStatus(html,err=false){
   const s=$("#status"); s.innerHTML=html; s.className=err?"err":"";
 }
