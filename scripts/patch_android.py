@@ -39,9 +39,8 @@ open(kts_path, "w", encoding="utf-8").write(src)
 mk = glob.glob(f"{gen}/app/src/main/java/**/MainActivity.kt", recursive=True)
 if mk:
     s2 = open(mk[0], encoding="utf-8").read()
-    if "POST_NOTIFICATIONS" not in s2:
-        inj = """    override fun onCreate(savedInstanceState: android.os.Bundle?) {
-        super.onCreate(savedInstanceState)
+    if "ActivityCompat.requestPermissions(" not in s2:
+        permission_block = """
         if (android.os.Build.VERSION.SDK_INT >= 33 && androidx.core.app.ActivityCompat.checkSelfPermission(
                 this, android.Manifest.permission.POST_NOTIFICATIONS
             ) != android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -49,13 +48,31 @@ if mk:
             androidx.core.app.ActivityCompat.requestPermissions(
                 this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 700
             )
-        }
+        }"""
+        # Tauri's generated MainActivity already has onCreate. Add the request
+        # inside that method rather than declaring a duplicate overload.
+        if "super.onCreate(savedInstanceState)" in s2:
+            s2 = s2.replace(
+                "super.onCreate(savedInstanceState)",
+                "super.onCreate(savedInstanceState)" + permission_block,
+                1,
+            )
+        else:
+            inj = """    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)""" + permission_block + """
     }
 """
-        s2 = re.sub(r'(class MainActivity\s*:\s*TauriActivity\(\)\s*\{)', r'\1\n' + inj, s2, count=1)
+            s2, count = re.subn(
+                r'(class MainActivity\s*:\s*TauriActivity\(\)\s*\{)',
+                lambda m: m.group(1) + "\n" + inj,
+                s2,
+                count=1,
+            )
+            if count == 0:
+                raise RuntimeError("MainActivity class declaration not found")
         open(mk[0], "w", encoding="utf-8").write(s2)
         print("MainActivity 权限注入 ✓")
     else:
-        print("MainActivity 已注入，跳过")
+        print("MainActivity 权限已注入，跳过")
 else:
     print("MainActivity.kt 未找到（glob 失败）")
