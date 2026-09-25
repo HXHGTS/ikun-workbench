@@ -503,30 +503,78 @@ function loadState(){
 
 /* ---------- IndexedDB 历史 ---------- */
 let _db=null;
-function idb(){ return _db||(_db=new Promise((res,rej)=>{
-  const rq=indexedDB.open("komi_bench",1);
-  rq.onupgradeneeded=()=>rq.result.createObjectStore("hist",{keyPath:"id",autoIncrement:true});
-  rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error);
-}));}
-async function histAdd(rec){
-  const db=await idb();
-  await new Promise((res,rej)=>{ const t=db.transaction("hist","readwrite");
-    t.objectStore("hist").add(rec);
-    t.objectStore("hist").count().then(c=>{ if(c.count>MAX_HIST){
-      t.objectStore("hist").getAllKeys().then(ks=>{ const old=ks.result.slice(0,c.count-MAX_HIST);
-        old.forEach(k=>t.objectStore("hist").delete(k)); }); } });
-    t.oncomplete=res; t.onerror=()=>rej(t.error); });
+function idb(){
+  if(_db) return _db;
+  _db=new Promise((res,rej)=>{
+    if(!window.indexedDB){ _db=null; rej(new Error("当前 WebView 不支持 IndexedDB")); return; }
+    let rq;
+    try{ rq=indexedDB.open("komi_bench",1); }
+    catch(e){ _db=null; rej(e); return; }
+    rq.onupgradeneeded=()=>{
+      if(!rq.result.objectStoreNames.contains("hist"))
+        rq.result.createObjectStore("hist",{keyPath:"id",autoIncrement:true});
+    };
+    rq.onsuccess=()=>{
+      const db=rq.result;
+      db.onversionchange=()=>{ db.close(); _db=null; };
+      db.onclose=()=>{ _db=null; };
+      res(db);
+    };
+    rq.onerror=()=>{ const err=rq.error||new Error("打开历史数据库失败"); _db=null; rej(err); };
+    rq.onblocked=()=>{ _db=null; rej(new Error("历史数据库被其他窗口占用，请关闭其他应用窗口后重试")); };
+  });
+  return _db;
 }
-async function histList(){ const db=await idb(); return new Promise((res,rej)=>{
-  const rq=db.transaction("hist").objectStore("hist").getAll();
-  rq.onsuccess=()=>res(rq.result.reverse()); rq.onerror=()=>rej(rq.error); });}
-async function histDel(id){ const db=await idb(); return new Promise(res=>{
-  const t=db.transaction("hist","readwrite"); t.objectStore("hist").delete(id); t.oncomplete=res;});}
-async function histClear(){ const db=await idb(); return new Promise(res=>{
-  const t=db.transaction("hist","readwrite"); t.objectStore("hist").clear(); t.oncomplete=res;});}
-async function histDelMany(ids){ const db=await idb(); return new Promise(res=>{
-  const t=db.transaction("hist","readwrite"); const st=t.objectStore("hist");
-  ids.forEach(id=>st.delete(id)); t.oncomplete=res;});}
+function histWrite(work){
+  return idb().then(db=>new Promise((res,rej)=>{
+    let t;
+    try{ t=db.transaction("hist","readwrite"); }
+    catch(e){ rej(e); return; }
+    t.oncomplete=()=>res();
+    t.onerror=()=>rej(t.error||new Error("历史记录写入失败"));
+    t.onabort=()=>rej(t.error||new Error("历史记录事务已中止"));
+    try{ work(t.objectStore("hist"),t); }
+    catch(e){ try{t.abort();}catch(_){} rej(e); }
+  }));
+}
+async function histAdd(rec){
+  /* IDBRequest is event-based, not a Promise: trim only after count succeeds,
+     and resolve after the transaction commits so closing the app cannot race it. */
+  await histWrite((st,t)=>{
+    st.add(rec);
+    const countReq=st.count();
+    countReq.onsuccess=()=>{
+      const excess=countReq.result-MAX_HIST;
+      if(excess<=0) return;
+      const keysReq=st.getAllKeys();
+      keysReq.onsuccess=()=>keysReq.result.slice(0,excess).forEach(key=>st.delete(key));
+      keysReq.onerror=()=>{ try{t.abort();}catch(_){} };
+    };
+    countReq.onerror=()=>{ try{t.abort();}catch(_){} };
+  });
+}
+async function histList(){
+  const db=await idb();
+  return new Promise((res,rej)=>{
+    let t, rows=[];
+    try{ t=db.transaction("hist","readonly"); }
+    catch(e){ rej(e); return; }
+    const rq=t.objectStore("hist").getAll();
+    rq.onsuccess=()=>{ rows=rq.result||[]; };
+    rq.onerror=()=>rej(rq.error||new Error("读取历史记录失败"));
+    t.oncomplete=()=>res(rows.reverse());
+    t.onerror=()=>rej(t.error||new Error("读取历史记录事务失败"));
+    t.onabort=()=>rej(t.error||new Error("读取历史记录事务已中止"));
+  });
+}
+async function histDel(id){ return histWrite(st=>st.delete(id)); }
+async function histClear(){ return histWrite(st=>st.clear()); }
+async function histDelMany(ids){ return histWrite(st=>ids.forEach(id=>st.delete(id))); }
+async function requestPersistentStorage(){
+  try{
+    if(navigator.storage&&navigator.storage.persist) await navigator.storage.persist();
+  }catch(e){ console.info("Persistent web storage request unavailable",e); }
+}
 
 /* ---------- Toast ---------- */
 function toast(msg,type="",ms=4200){
@@ -1349,7 +1397,7 @@ async function runImage(cfg,ad,p){
       let blob;
       if(src.startsWith("data:")) blob=await (await fetch(src)).blob();
       else blob=await fetchBlob(src,cfg.key);
-      saveHist({kind:"image",platform:ad.name,model:p.model,ts:rec.ts,prompt:rec.prompt,blob,cost:cTxt});
+      await saveHist({kind:"image",platform:ad.name,model:p.model,ts:rec.ts,prompt:rec.prompt,blob,cost:cTxt});
     }catch(e){ console.warn("历史保存失败",e); }
   }
   setStatus(`✅ 生成完成 · ${out.length} 张${cTxt} · ${esc(ad.name)}`);
@@ -1380,7 +1428,7 @@ async function runVideo(cfg,ad,p){
       const rec={kind:"video",platform:ad.name,model:p.model,ts:now(),src:objURL,cost:cTxt,
         prompt:$("#prompt").value.trim(),fname:fnameOf({ts:now(),platform:state.platform},"mp4")};
       renderResult(rec);
-      saveHist({kind:"video",platform:ad.name,model:p.model,ts:rec.ts,prompt:rec.prompt,blob,cost:cTxt});
+      await saveHist({kind:"video",platform:ad.name,model:p.model,ts:rec.ts,prompt:rec.prompt,blob,cost:cTxt});
       setStatus(`✅ 视频生成完成 · ${(blob.size/1048576).toFixed(1)} MB · 用时 ${Math.round(el/60)}分${el%60}秒${cTxt}`);
       toast(`视频生成完成 🎬${cTxt?"，"+cTxt.replace(" · ","花费 "):""}`,"ok");
       nresult(true,`视频已生成 · ${p.model.slice(0,24)} · ${(blob.size/1048576).toFixed(1)} MB${cTxt}`);
@@ -1397,7 +1445,14 @@ async function runVideo(cfg,ad,p){
   throw new Error("等待超时（15 分钟），任务可能仍在进行，可稍后重试");
 }
 async function saveHist(rec){
-  try{ await histAdd({...rec,ts:Date.now(),tsStr:now()}); }catch(e){ console.warn(e); }
+  try{
+    await histAdd({...rec,ts:Date.now(),tsStr:now()});
+    return true;
+  }catch(e){
+    console.error("历史保存失败",e);
+    toast("历史记录保存失败："+(e.message||e),"err",8000);
+    return false;
+  }
 }
 
 /* ═══════════ 模型在线拉取 ═══════════ */
@@ -1449,7 +1504,12 @@ async function renderHist(){
     g.appendChild(cell);
   }
 }
-function openDrawer(){ $("#drawerHist").classList.add("show"); $("#maskHist").classList.add("show"); renderHist(); }
+async function openDrawer(){
+  $("#drawerHist").classList.add("show"); $("#maskHist").classList.add("show");
+  await requestPersistentStorage();
+  try{ await renderHist(); }
+  catch(e){ console.error("历史记录读取失败",e); $("#histGrid").innerHTML=`<div class="help">历史读取失败：${esc(e.message||e)}</div>`; }
+}
 function closeDrawer(){ $("#drawerHist").classList.remove("show"); $("#maskHist").classList.remove("show");
   if(histSelMode){histSelMode=false;histSel.clear();} }
 
@@ -1628,6 +1688,7 @@ function bind(){
 
 /* ═══════════ 初始化 ═══════════ */
 loadState();
+requestPersistentStorage();
 bind();
 syncUI();
 applyBG();

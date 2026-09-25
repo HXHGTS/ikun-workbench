@@ -3,7 +3,8 @@
    1) ABI splits + universalApk（Kotlin DSL 语法）
    2) release 关闭 proguard（防 JNI 反射插件类被混淆裁掉）
    3) MainActivity.kt 通知权限请求"""
-import re, sys, glob
+import re, sys, glob, shutil
+from pathlib import Path
 
 gen = sys.argv[1] if len(sys.argv) > 1 else "gen/android"
 
@@ -76,3 +77,19 @@ if mk:
         print("MainActivity 权限已注入，跳过")
 else:
     print("MainActivity.kt 未找到（glob 失败）")
+
+# 4) Restore the established Android launcher icon from the shared Capacitor
+# resource set. Tauri's icon generator otherwise derives Android icons from
+# windows-tauri/icons/icon.png, which changes the installed APK artwork.
+repo_root = Path(__file__).resolve().parents[1]
+source_res = repo_root / "android" / "app" / "src" / "main" / "res"
+target_res = Path(gen).resolve() / "app" / "src" / "main" / "res"
+icon_files = [p for p in source_res.rglob("ic_launcher*") if p.is_file()]
+if not icon_files:
+    raise RuntimeError(f"Original Android launcher icon resources not found: {source_res}")
+for source in icon_files:
+    rel = source.relative_to(source_res)
+    target = target_res / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+print(f"Android launcher icon restored from shared resources ✓ ({len(icon_files)} files)")

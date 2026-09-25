@@ -19,26 +19,42 @@ data class SaveArgs(val name: String = "", val mime: String = "image/png", val b
 class KomiPlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun show(invoke: Invoke) {
-        val a = invoke.parseArgs(ShowArgs::class.java)
-        KomiService.start(activity, a.title, a.text, a.priority)
-        invoke.resolve()
+        try {
+            val a = invoke.parseArgs(ShowArgs::class.java)
+            KomiService.start(activity, a.title, a.text, a.priority)
+            invoke.resolve()
+        } catch (e: Exception) {
+            invoke.reject(e.message ?: "notification start failed")
+        }
     }
     @Command
     fun update(invoke: Invoke) {
-        val a = invoke.parseArgs(UpdateArgs::class.java)
-        KomiService.notifyUpdate(activity, a.text, a.progress)
-        invoke.resolve()
+        try {
+            val a = invoke.parseArgs(UpdateArgs::class.java)
+            KomiService.notifyUpdate(activity, a.text, a.progress)
+            invoke.resolve()
+        } catch (e: Exception) {
+            invoke.reject(e.message ?: "notification update failed")
+        }
     }
     @Command
     fun hide(invoke: Invoke) {
-        KomiService.stop(activity)
-        invoke.resolve()
+        try {
+            KomiService.stop(activity)
+            invoke.resolve()
+        } catch (e: Exception) {
+            invoke.reject(e.message ?: "notification stop failed")
+        }
     }
     @Command
     fun result(invoke: Invoke) {
-        val a = invoke.parseArgs(ResultArgs::class.java)
-        KomiService.notifyResult(activity, a.ok, a.text)
-        invoke.resolve()
+        try {
+            val a = invoke.parseArgs(ResultArgs::class.java)
+            KomiService.notifyResult(activity, a.ok, a.text)
+            invoke.resolve()
+        } catch (e: Exception) {
+            invoke.reject(e.message ?: "result notification failed")
+        }
     }
     @Command
     fun save(invoke: Invoke) {
